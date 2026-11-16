@@ -1,0 +1,8 @@
+datasets
+pandas
+scikit-learn
+joblib
+torch
+transformers>=4.41,<5
+accelerate>=0.26
+huggingface_hub

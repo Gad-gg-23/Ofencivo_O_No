@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+data/crudos/
+data/procesados/entrenamiento.tsv
+salidas/modelo_xlmr/
+salidas/checkpoints_temporales/
+salidas/baseline_tfidf_logreg.joblib
