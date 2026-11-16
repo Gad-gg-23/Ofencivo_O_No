@@ -1,11 +1,13 @@
 """
 Punto de entrada único del clasificador Ofensivo / No Ofensivo (es + en).
 
-    python Ofensivo_o_NoOfensivo.py descargar       -> baja las 4 fuentes desde Hugging Face
-    python Ofensivo_o_NoOfensivo.py preparar        -> limpia, une y arma train/val/test + codeswitch
-    python Ofensivo_o_NoOfensivo.py entrenar-base   -> entrena el baseline TF-IDF + Regresión Logística
-    python Ofensivo_o_NoOfensivo.py entrenar        -> afina XLM-RoBERTa sobre los datos preparados
-    python Ofensivo_o_NoOfensivo.py evaluar         -> compara baseline vs. Transformer, incluye code-switching
+    python Ofensivo_o_NoOfensivo.py descargar          -> baja las 4 fuentes desde Hugging Face
+    python Ofensivo_o_NoOfensivo.py preparar           -> limpia, une y arma train/val/test + codeswitch
+    python Ofensivo_o_NoOfensivo.py entrenar-base      -> baseline TF-IDF + Regresión Logística (con K-Fold)
+    python Ofensivo_o_NoOfensivo.py entrenar           -> afina XLM-RoBERTa sobre los datos preparados
+    python Ofensivo_o_NoOfensivo.py entrenar-categorias -> detectores de racismo/clasismo/etc.
+    python Ofensivo_o_NoOfensivo.py evaluar            -> compara baseline vs. Transformer vs. ensamble
+    python Ofensivo_o_NoOfensivo.py votar --texto "..."       -> clasifica con el ensamble por votación
     python Ofensivo_o_NoOfensivo.py predecir --texto "..." [--explicar]
 """
 
@@ -38,10 +40,23 @@ def comando_entrenar():
     entrenar.entrenar()
 
 
+def comando_entrenar_categorias():
+    import entrenar_categorias
+
+    entrenar_categorias.main()
+
+
 def comando_evaluar():
     import evaluar
 
     evaluar.main()
+
+
+def comando_votar(args_restantes):
+    import votar
+
+    sys.argv = [sys.argv[0]] + args_restantes
+    votar.main()
 
 
 def comando_predecir(args_restantes):
@@ -56,9 +71,11 @@ def main():
     subparsers = parser.add_subparsers(dest="comando", required=True)
     subparsers.add_parser("descargar", help="Descarga las fuentes desde Hugging Face.")
     subparsers.add_parser("preparar", help="Limpia, une y arma los conjuntos (+ code-switching).")
-    subparsers.add_parser("entrenar-base", help="Entrena el baseline TF-IDF + Regresión Logística.")
+    subparsers.add_parser("entrenar-base", help="Entrena el baseline TF-IDF + Regresión Logística (con K-Fold).")
     subparsers.add_parser("entrenar", help="Afina XLM-RoBERTa sobre los datos preparados.")
-    subparsers.add_parser("evaluar", help="Compara baseline vs. Transformer (incluye code-switching).")
+    subparsers.add_parser("entrenar-categorias", help="Entrena los detectores de racismo/clasismo/etc.")
+    subparsers.add_parser("evaluar", help="Compara baseline vs. Transformer vs. ensamble (incluye code-switching).")
+    subparsers.add_parser("votar", help="Clasifica una frase con el ensamble por votación.")
     subparsers.add_parser("predecir", help="Clasifica una frase como ofensiva o no ofensiva.")
 
     args, restantes = parser.parse_known_args()
@@ -71,8 +88,12 @@ def main():
         comando_entrenar_base()
     elif args.comando == "entrenar":
         comando_entrenar()
+    elif args.comando == "entrenar-categorias":
+        comando_entrenar_categorias()
     elif args.comando == "evaluar":
         comando_evaluar()
+    elif args.comando == "votar":
+        comando_votar(restantes)
     elif args.comando == "predecir":
         comando_predecir(restantes)
 

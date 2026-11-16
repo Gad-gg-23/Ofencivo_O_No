@@ -1,7 +1,10 @@
 """
 Descarga las 4 fuentes de config.FUENTES desde Hugging Face Datasets y las
 deja, cada una por separado, en data/crudos/<fuente>.csv con el mismo
-esquema: texto, idioma, ofensivo (0/1), fuente, split_original.
+esquema: texto, idioma, ofensivo (0/1), fuente, split_original, más una
+columna extra_<columna> por cada entrada en "columnas_extra" de esa fuente
+(piuba_odio: RACISM/CLASS/etc.; OffendES: la etiqueta NO/NOE/OFP/OFG
+original) -- esas alimentan a entrenar_categorias.py.
 
 Uso:
     python descargar_datos.py                     # las 4 fuentes
@@ -47,24 +50,29 @@ def descargar_fuente(nombre):
         sys.exit(f"Error descargando {nombre} ({info['repo']}): {error}.{extra}")
 
     columna_texto, columna_label = info["columna_texto"], info["columna_label"]
+    columnas_extra = info.get("columnas_extra", [])
     filas = []
     for split in info["splits"]:
         if split not in ds_dict:
             continue
         ds = ds_dict[split]
         feature = ds.features[columna_label]
+        features_extra = {col: ds.features[col] for col in columnas_extra}
         for ejemplo in ds:
             texto = ejemplo[columna_texto]
             etiqueta_nombre = _resolver_etiqueta(ejemplo, columna_label, feature)
             if etiqueta_nombre not in info["mapa_label"]:
                 continue  # etiqueta inesperada (no debería pasar, pero no se descarta todo el dataset por eso)
-            filas.append({
+            fila = {
                 "texto": texto,
                 "idioma": info["idioma"],
                 "ofensivo": info["mapa_label"][etiqueta_nombre],
                 "fuente": nombre,
                 "split_original": split,
-            })
+            }
+            for col in columnas_extra:
+                fila[f"extra_{col}"] = _resolver_etiqueta(ejemplo, col, features_extra[col])
+            filas.append(fila)
 
     df = pd.DataFrame(filas)
     config.RUTA_CRUDOS.mkdir(parents=True, exist_ok=True)

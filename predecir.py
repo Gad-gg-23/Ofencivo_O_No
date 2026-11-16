@@ -1,18 +1,23 @@
 """
-Clasifica una frase como ofensiva o no ofensiva con el Transformer ya
-afinado. Busca, en orden: el modelo local (salidas/modelo_xlmr/, el que deja
-entrenar.py), el modelo compartido del equipo en Hugging Face
-(config.HF_REPO_MODELO, se descarga solo la primera vez y queda en caché), y
-por último xlm-roberta-base sin afinar (con aviso de que las predicciones no
-van a ser confiables).
+Clasifica una frase como ofensiva o no ofensiva.
+
+Si están entrenados el baseline, el Transformer Y los detectores de
+categoría, usa el ensamble por votación de votar.py (recomendado: es el que
+mejor generaliza, ver evaluar.py). Si falta alguna pieza, cae de vuelta a
+usar solo el Transformer -- buscado en orden: el modelo local
+(salidas/modelo_xlmr/, el que deja entrenar.py), el modelo compartido del
+equipo en Hugging Face (config.HF_REPO_MODELO, se descarga solo la primera
+vez y queda en caché), y por último xlm-roberta-base sin afinar (con aviso
+de que las predicciones no van a ser confiables).
 
     python predecir.py --texto "esta frase es una prueba"
+    python predecir.py --texto "esta frase es una prueba" --sin-ensamble   # fuerza solo el Transformer
 
 Con --explicar, además de la predicción, quita una palabra a la vez y mide
-cuánto cae la probabilidad de "ofensivo" al quitarla -- la(s) palabra(s) con
-mayor caída son las que más "convencieron" al modelo de que la frase es
-ofensiva (leave-one-out, una forma simple de interpretabilidad sin
-necesitar librerías extra):
+cuánto cae la probabilidad de "ofensivo" (según el Transformer) al
+quitarla -- la(s) palabra(s) con mayor caída son las que más
+"convencieron" al modelo de que la frase es ofensiva (leave-one-out, una
+forma simple de interpretabilidad sin necesitar librerías extra):
 
     python predecir.py --texto "esta frase es una prueba" --explicar
 """
@@ -85,15 +90,38 @@ def explicar(texto):
 def main():
     parser = argparse.ArgumentParser(description="Clasifica una frase como ofensiva o no ofensiva.")
     parser.add_argument("--texto", required=True)
+    parser.add_argument("--sin-ensamble", action="store_true",
+                        help="Usa solo el Transformer, aunque el ensamble esté disponible.")
     parser.add_argument("--explicar", action="store_true",
-                        help="Muestra qué palabras más influyeron en la predicción (leave-one-out).")
+                        help="Muestra qué palabras más influyeron en la predicción del Transformer (leave-one-out).")
     args = parser.parse_args()
 
-    etiqueta, prob = clasificar(args.texto)
-    print(f"{etiqueta}  (probabilidad de ofensivo: {prob:.1%})")
+    usar_ensamble = False
+    if not args.sin_ensamble:
+        import votar
+        usar_ensamble = all(votar.componentes_disponibles().values())
+
+    if usar_ensamble:
+        etiqueta, detalle = votar.votar_texto(args.texto)
+        print(f"{etiqueta}  ({detalle['total_votos']}/3 votos del ensamble)")
+        print(f"  baseline:     {'ofensivo' if detalle['votos']['baseline'] else 'no_ofensivo'} "
+              f"(prob={detalle['prob_baseline']:.1%})")
+        print(f"  transformer:  {'ofensivo' if detalle['votos']['transformer'] else 'no_ofensivo'} "
+              f"(prob={detalle['prob_transformer']:.1%})")
+        comite = detalle["categorias_activas"] or ["ninguna"]
+        print(f"  comité categorías: {'ofensivo' if detalle['votos']['comite_categorias'] else 'no_ofensivo'} "
+              f"(categorías activas: {', '.join(comite)})")
+    else:
+        if not args.sin_ensamble:
+            print("Aviso: no están las 3 piezas del ensamble (baseline/Transformer/detectores de categoría) "
+                  "-- usando solo el Transformer. Corre entrenar_baseline.py y entrenar_categorias.py "
+                  "para activar el ensamble completo.")
+        etiqueta, prob = clasificar(args.texto)
+        print(f"{etiqueta}  (probabilidad de ofensivo según el Transformer: {prob:.1%})")
 
     if args.explicar:
-        print("\nPalabras que más empujan hacia 'ofensivo' (quitarlas bajó más la probabilidad):")
+        print("\nPalabras que más empujan hacia 'ofensivo' según el Transformer "
+              "(quitarlas bajó más la probabilidad):")
         for palabra, aporte in explicar(args.texto)[:5]:
             signo = "+" if aporte >= 0 else ""
             print(f"  {palabra!r}: {signo}{aporte:.1%}")

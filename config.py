@@ -54,6 +54,11 @@ FUENTES = {
         "gated": False,
         "splits": ["train", "dev", "test"],
         "cita": "Pérez et al., 2023, IEEE Access (arXiv:2210.00465)",
+        # Columnas de categoría (NO/YES), aparte del binario HATEFUL de arriba.
+        # Se guardan tal cual en crudos/piuba_odio.csv para entrenar los
+        # detectores de categoría (ver CATEGORIAS más abajo) -- no entran al
+        # esquema unificado de preparar_datos.py, que solo usa 'ofensivo'.
+        "columnas_extra": ["RACISM", "CLASS", "WOMEN", "LGBTI", "POLITICS", "DISABLED", "APPEARANCE", "CRIMINAL"],
     },
     "offendes": {
         # Comentarios de jóvenes influencers en Twitter/Instagram/YouTube
@@ -72,6 +77,10 @@ FUENTES = {
         "gated": True,
         "splits": ["train", "validation", "test"],
         "cita": "Plaza-del-Arco et al., 2021, RANLP",
+        # La etiqueta original (NO/NOE/OFP/OFG) se guarda aparte de 'ofensivo'
+        # porque OFP (ofende a una persona específica) es justo la señal que
+        # usa el detector de categoría "insulto_personal" (ver CATEGORIAS).
+        "columnas_extra": ["label"],
     },
     "tweet_eval_offensive": {
         # OffensEval 2019 (SemEval Task 6): tuits en inglés, ya binario.
@@ -99,6 +108,67 @@ FUENTES = {
         "cita": "Davidson et al., 2017, ICWSM",
     },
 }
+
+# =========================================================
+# DETECTORES DE CATEGORÍA (entrenar_categorias.py)
+# =========================================================
+# Modelos chicos (TF-IDF + Regresión Logística, uno por categoría) que
+# responden una pregunta más específica que "¿es ofensivo?": ¿esta frase es
+# racista/clasista/etc.? Cada uno se entrena SOLO con las filas de la fuente
+# que trae esa etiqueta -- nunca se le asigna 0 a una fuente que simplemente
+# no anotó esa categoría (ej. no sabemos si un tuit de davidson es clasista
+# solo porque esa fuente no lo etiquetó; asumir que no lo es metería ruido
+# justo en la categoría que queremos detectar bien).
+#
+# "valores_positivos": qué valor(es) de esa columna cuentan como 1.
+CATEGORIAS = {
+    "racismo": {"fuente": "piuba_odio", "columna_extra": "RACISM", "valores_positivos": {"YES"}},
+    "clasismo": {"fuente": "piuba_odio", "columna_extra": "CLASS", "valores_positivos": {"YES"}},
+    "odio_mujeres": {"fuente": "piuba_odio", "columna_extra": "WOMEN", "valores_positivos": {"YES"}},
+    "odio_lgbti": {"fuente": "piuba_odio", "columna_extra": "LGBTI", "valores_positivos": {"YES"}},
+    "odio_politico": {"fuente": "piuba_odio", "columna_extra": "POLITICS", "valores_positivos": {"YES"}},
+    "odio_discapacidad": {"fuente": "piuba_odio", "columna_extra": "DISABLED", "valores_positivos": {"YES"}},
+    "odio_apariencia": {"fuente": "piuba_odio", "columna_extra": "APPEARANCE", "valores_positivos": {"YES"}},
+    "odio_delincuencia": {"fuente": "piuba_odio", "columna_extra": "CRIMINAL", "valores_positivos": {"YES"}},
+    # OFP = OffendES: ofende a una persona específica (insulto/grosería
+    # directa), distinto de los 8 de arriba que son odio hacia un grupo.
+    "insulto_personal": {"fuente": "offendes", "columna_extra": "label", "valores_positivos": {"OFP"}},
+}
+
+RUTA_DETECTORES_CATEGORIA = RUTA_SALIDAS / "detectores_categoria.joblib"
+UMBRAL_CATEGORIA = 0.5  # probabilidad mínima para que un detector de categoría "encienda"
+
+# =========================================================
+# ENSAMBLE POR VOTACIÓN (votar.py)
+# =========================================================
+# 3 votantes, cada uno con su propia manera de decidir "ofensivo":
+#   1. baseline general (TF-IDF + Regresión Logística, entrenar_baseline.py)
+#   2. Transformer general (XLM-RoBERTa afinado, entrenar.py)
+#   3. "comité de categorías": vota ofensivo si CUALQUIER detector de
+#      CATEGORIAS se activa (racismo, clasismo, insulto personal, etc.) --
+#      cuenta como UN solo voto, no uno por categoría, para no sesgar la
+#      votación a favor de "ofensivo" solo por tener muchos detectores.
+# Mayoría simple: ofensivo si al menos 2 de los 3 votan ofensivo.
+VOTOS_MINIMOS_OFENSIVO = 2
+
+# =========================================================
+# VALIDACIÓN (entrenar_baseline.py, evaluar.py)
+# =========================================================
+# K-Fold en el baseline (barato en CPU) para elegir el mejor C de la
+# Regresión Logística con una estimación más confiable que un solo split --
+# misma técnica que la práctica de Validacion del curso. NO se hace K-Fold
+# sobre el Transformer: con ~125k ejemplos un split bien estratificado ya es
+# estable, y repetir el afinamiento K veces en GPU gastaría de más las horas
+# gratis de Colab para una ganancia marginal.
+K_FOLDS_BASELINE = 5
+VALORES_C_BASELINE = [0.1, 1.0, 10.0]
+RUTA_BASELINE_CV_CSV = RUTA_SALIDAS / "baseline_cv_resultados.csv"
+
+# Bootstrap sobre las predicciones del test (no reentrena nada) para dar un
+# intervalo de confianza a Accuracy/F1 en vez de un solo número suelto --
+# la otra técnica de Validacion que sí es barata para el Transformer.
+N_BOOTSTRAP = 1000
+CONFIANZA_BOOTSTRAP = 0.95
 
 # =========================================================
 # LIMPIEZA Y PARTICIÓN (preparar_datos.py)
@@ -163,3 +233,4 @@ BASELINE_NGRAMA = (1, 2)
 # =========================================================
 RUTA_RESULTADOS_CSV = RUTA_SALIDAS / "resultados_comparacion.csv"
 RUTA_MATRIZ_CONFUSION_CSV = RUTA_SALIDAS / "matriz_confusion.csv"
+RUTA_MATRIZ_CONFUSION_ENSAMBLE_CSV = RUTA_SALIDAS / "matriz_confusion_ensamble.csv"

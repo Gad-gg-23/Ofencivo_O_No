@@ -7,3 +7,4 @@ data/procesados/entrenamiento.tsv
 salidas/modelo_xlmr/
 salidas/checkpoints_temporales/
 salidas/baseline_tfidf_logreg.joblib
+salidas/detectores_categoria.joblib
