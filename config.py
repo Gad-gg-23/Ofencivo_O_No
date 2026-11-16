@@ -136,7 +136,50 @@ CATEGORIAS = {
 }
 
 RUTA_DETECTORES_CATEGORIA = RUTA_SALIDAS / "detectores_categoria.joblib"
-UMBRAL_CATEGORIA = 0.5  # probabilidad mínima para que un detector de categoría "encienda"
+# 0.65, no 0.5: las categorías con pocos positivos reales (odio_mujeres,
+# odio_lgbti, odio_politico, odio_discapacidad -- unos cientos sobre ~38k
+# ejemplos) con class_weight="balanced" tienden a encender varias a la vez
+# ante CUALQUIER frase fuera de su dominio de entrenamiento (piuba_odio es
+# de Twitter argentino), no solo ante frases realmente de esa categoría.
+# Subir el umbral no lo arregla del todo (ver GUIA_EQUIPO.md), pero reduce
+# el ruido cruzado sin tocar el veredicto final del ensamble (que solo
+# necesita que ALGÚN detector encienda para contar 1 voto).
+UMBRAL_CATEGORIA = 0.65
+
+# =========================================================
+# LÉXICO DE MODISMOS MEXICANOS (lexicon.py)
+# =========================================================
+# piuba_odio es de Twitter argentino y OffendES de redes juveniles en
+# español general -- ninguna de las dos trae modismos mexicanos de clasismo
+# (ej. "naco") o racismo (ej. "indio", "prieto"), así que el vocabulario de
+# esos detectores simplemente no los conoce. lexicon.py arma, a partir de
+# lexicon/jerga_mexicana.csv (armado a mano por el equipo), EJEMPLOS DE
+# ENTRENAMIENTO sintéticos adicionales -- no una regla de "si contiene la
+# palabra es ofensivo" aparte, que inflaría falsos positivos en palabras
+# ambiguas como "wey" o "naco" (ver columna depende_del_contexto).
+RUTA_LEXICON = RAIZ / "lexicon" / "jerga_mexicana.csv"
+
+# La columna categoria_principal/categoria_secundaria del CSV no usa los
+# mismos nombres que CATEGORIAS de arriba; este mapeo traduce entre ambos.
+# "vulgaridad" no tiene categoría equivalente (nunca aparece como principal
+# en el CSV, solo como secundaria) y se ignora a propósito.
+MAPA_CATEGORIAS_LEXICON = {
+    "clasismo": "clasismo",
+    "racismo": "racismo",
+    "misoginia": "odio_mujeres",
+    "homofobia": "odio_lgbti",
+    "politico_ideologico": "odio_politico",
+    "capacitismo": "odio_discapacidad",
+    "insulto_personal": "insulto_personal",
+}
+
+# Filas con categoria_principal/secundaria == NINGUNA_NO_OFENSIVA se omiten
+# del entrenamiento por completo (palabras como "wey", "chido", "no mames"
+# que NO son ofensivas) -- se quedan en el CSV solo como referencia del
+# equipo, nunca como ejemplo de ninguna clase.
+NINGUNA_NO_OFENSIVA_LEXICON = "ninguna_no_ofensivo"
+
+MAX_EJEMPLOS_LEXICON_POR_CATEGORIA = 400  # tope para que no domine sobre los datos reales
 
 # =========================================================
 # ENSAMBLE POR VOTACIÓN (votar.py)

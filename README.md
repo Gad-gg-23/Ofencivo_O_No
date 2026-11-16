@@ -82,6 +82,8 @@ descargar_datos.py         baja las 4 fuentes de Hugging Face y unifica su esque
 preparar_datos.py          limpieza, partición y code-switching sintético
 entrenar_baseline.py       TF-IDF + Regresión Logística, con K-Fold para elegir C (referencia rápida en CPU)
 entrenar_categorias.py     detectores binarios por categoría (racismo, clasismo, insulto_personal, etc.)
+lexicon_mx.py              genera ejemplos sintéticos desde lexicon/jerga_mexicana.csv (modismos MX)
+lexicon/jerga_mexicana.csv léxico de jerga mexicana armado a mano por el equipo (1,350 filas)
 entrenar.py                 afina XLM-RoBERTa con pérdida ponderada por clase
 evaluar.py                  compara baseline vs. Transformer vs. ensamble (general, por idioma/fuente, code-switching, con IC bootstrap)
 votar.py                    ensamble por votación (baseline + Transformer + comité de categorías)
@@ -122,6 +124,18 @@ sabemos si un tuit en inglés de `davidson` es clasista solo porque esa fuente n
 asumir que no lo es metería ruido justo en la categoría que queremos detectar bien). Por esto
 mismo, estos detectores **solo cubren español** por ahora — las fuentes con esas categorías
 anotadas son ambas en español.
+
+**Refuerzo con léxico mexicano:** ni `piuba_odio` (Twitter argentino) ni `OffendES` traen
+modismos mexicanos de clasismo/racismo (ej. "naco", "prieto"). `lexicon_mx.py` genera ejemplos
+de entrenamiento sintéticos a partir de `lexicon/jerga_mexicana.csv` (armado a mano por el
+equipo) y los mezcla con los datos reales — nunca como una regla rígida de "si contiene la
+palabra es ofensivo" (eso dispararía con "wey" entre amigos), sino como ejemplos en ambos
+sentidos para las palabras ambiguas, para que el modelo aprenda a distinguir por contexto. Tiene
+una limitación conocida: las categorías con pocos positivos reales (mujeres, LGBTI, política,
+discapacidad) pueden encender varias a la vez ante frases mexicanas fuera de su dominio de
+entrenamiento — no afecta el veredicto final del ensamble (ver abajo), pero si muestran en la
+exposición qué categorías se activaron, traten ese detalle como aproximado para esas 4. Detalle
+completo en [GUIA_EQUIPO.md](GUIA_EQUIPO.md), Parte 7.1.
 
 ### Ensamble por votación (`votar.py`)
 

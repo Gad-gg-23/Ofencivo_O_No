@@ -199,6 +199,39 @@ solo el Transformer y lo avisa).
 
 ---
 
+## Parte 7.1 — Léxico de modismos mexicanos (`lexicon/jerga_mexicana.csv`)
+
+`piuba_odio` (Twitter argentino) y `OffendES` (redes juveniles en español general) no traen
+modismos mexicanos de clasismo/racismo (ej. "naco", "prieto", "indio" como insulto). El equipo
+armó a mano `lexicon/jerga_mexicana.csv` (1,350 filas: término, variantes de escritura,
+categoría, si depende del contexto) para tapar ese hueco. `lexicon_mx.py` NO lo usa como una
+regla de "si contiene la palabra, es ofensivo" (eso dispararía con "wey" o "naco" entre amigos)
+— en vez de eso, genera ejemplos de entrenamiento sintéticos que `entrenar_categorias.py` mezcla
+con los datos reales:
+
+- Palabras nunca ambiguas (`depende_del_contexto=no`, ej. "nigger", "pinche indio") → solo
+  ejemplos ofensivos.
+- Palabras ambiguas (`depende_del_contexto=si`, ej. "naco", "wey", "cabrón") → ejemplos en
+  **ambos** sentidos (insultante y vocativo/amistoso), para que el modelo aprenda a distinguir
+  por el resto de la frase.
+- Las marcadas `ninguna_no_ofensivo` (ej. "chido", "no mames") se excluyen del entrenamiento
+  por completo, tal como se pidió — quedan en el CSV solo como referencia del equipo.
+
+**Limitación conocida (por ahora sin resolver del todo):** las categorías con pocos positivos
+reales en `piuba_odio` (odio_mujeres, odio_lgbti, odio_politico, odio_discapacidad — unos
+cientos sobre ~38k ejemplos) tienden a encender varias a la vez ante frases mexicanas que están
+fuera de su dominio de entrenamiento, no solo ante frases realmente de esa categoría (ej.
+"pinche indio" puede marcar también odio_discapacidad sin relación real). `UMBRAL_CATEGORIA`
+se subió a 0.65 para mitigarlo, pero no lo elimina. **Esto no cambia el veredicto final del
+ensamble** (el comité solo necesita que ALGÚN detector encienda para contar 1 voto, sin importar
+cuántos), pero si van a mostrar en la exposición qué categorías específicas se activaron, traten
+ese detalle como aproximado para mujeres/LGBTI/política/discapacidad — racismo, clasismo,
+insulto_personal y odio_apariencia son más confiables (más datos reales y/o refuerzo del
+léxico). Para resolverlo de raíz haría falta más datos reales por categoría o calibrar el umbral
+de cada detector por separado con un set de validación — fuera del alcance de esta entrega.
+
+---
+
 ## Parte 8 — Interpretabilidad: `--explicar`
 
 `predecir.py --explicar` quita cada palabra de la frase, una a la vez, y mide cuánto cae la
