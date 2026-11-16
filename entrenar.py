@@ -25,6 +25,7 @@ from sklearn.metrics import f1_score
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
+    DataCollatorWithPadding,
     Trainer,
     TrainingArguments,
 )
@@ -108,15 +109,34 @@ def entrenar():
         seed=config.SEMILLA,
     )
 
-    entrenador = EntrenadorConPesos(
-        pesos_clase=pesos_clase,
-        model=modelo,
-        args=argumentos,
-        train_dataset=ds_train,
-        eval_dataset=ds_val,
-        tokenizer=tokenizer,
-        compute_metrics=metricas,
-    )
+    # Sin esto, el Trainer intentaría apilar tensores de distinto largo (cada
+    # frase tokeniza a un número distinto de tokens) y tronaría al armar el
+    # primer lote -- rellena cada lote al largo de su frase más larga.
+    collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+    try:
+        # transformers >= 4.49 renombró tokenizer= a processing_class= en Trainer.
+        entrenador = EntrenadorConPesos(
+            pesos_clase=pesos_clase,
+            model=modelo,
+            args=argumentos,
+            train_dataset=ds_train,
+            eval_dataset=ds_val,
+            processing_class=tokenizer,
+            data_collator=collator,
+            compute_metrics=metricas,
+        )
+    except TypeError:
+        entrenador = EntrenadorConPesos(
+            pesos_clase=pesos_clase,
+            model=modelo,
+            args=argumentos,
+            train_dataset=ds_train,
+            eval_dataset=ds_val,
+            tokenizer=tokenizer,
+            data_collator=collator,
+            compute_metrics=metricas,
+        )
 
     print("Afinando (esto tarda varios minutos, va a imprimir el progreso por época)...")
     resultado = entrenador.train()
