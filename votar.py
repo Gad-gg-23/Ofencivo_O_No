@@ -41,12 +41,28 @@ def _cargar_detectores_categoria():
     return _detectores_categoria
 
 
+def _hay_transformer():
+    """True si hay un modelo afinado local, O si el del equipo existe en
+    Hugging Face (predecir.cargar_modelo() lo descarga solo). Sin este
+    segundo caso, el ensamble se reportaría como "no disponible" en
+    cualquier máquina que no haya corrido entrenar.py, aunque el modelo del
+    equipo ya esté compartido -- justo el caso de usar el ensamble sin
+    haber entrenado el Transformer uno mismo."""
+    if config.RUTA_MODELO_DIR.exists():
+        return True
+    try:
+        from huggingface_hub import repo_exists
+        return repo_exists(config.HF_REPO_MODELO)
+    except Exception:
+        return False
+
+
 def componentes_disponibles():
     """Qué votantes se pueden calcular ahora mismo, para que evaluar.py y
     predecir.py decidan si corren el ensamble completo o avisan qué falta."""
     return {
         "baseline": _cargar_baseline() is not None,
-        "transformer": config.RUTA_MODELO_DIR.exists(),
+        "transformer": _hay_transformer(),
         "categorias": bool(_cargar_detectores_categoria()),
     }
 
