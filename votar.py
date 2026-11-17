@@ -47,14 +47,22 @@ def _hay_transformer():
     segundo caso, el ensamble se reportaría como "no disponible" en
     cualquier máquina que no haya corrido entrenar.py, aunque el modelo del
     equipo ya esté compartido -- justo el caso de usar el ensamble sin
-    haber entrenado el Transformer uno mismo."""
+    haber entrenado el Transformer uno mismo.
+
+    Si la llamada de red a Hugging Face falla (timeout, conexión lenta,
+    etc.), se asume que SÍ está disponible en vez de que no: un "sí" de
+    más solo hace que se intente cargar el modelo y, si de verdad no hay
+    red, predecir.cargar_modelo() ya tiene su propio respaldo (nunca
+    truena, solo avisa) -- mientras que un "no" de más apaga el ensamble
+    completo por un hipo de red pasajero, que es justo lo que se quiere
+    evitar."""
     if config.RUTA_MODELO_DIR.exists():
         return True
     try:
         from huggingface_hub import repo_exists
         return repo_exists(config.HF_REPO_MODELO)
     except Exception:
-        return False
+        return True
 
 
 def componentes_disponibles():
